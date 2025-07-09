@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({ user, onSignOut, onNavigate }) => {
             <div className="bg-gradient-to-r from-blue-500 to-cyan-500 p-2 rounded-lg group-hover:shadow-glow transition-all duration-300">
               <FileText className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-heading font-bold text-slate-100">ATS Checker</span>
+            <span className="text-xl font-heading font-bold text-slate-100">ATS Raiser AI</span>
           </div>
 
           <nav className="hidden md:flex items-center space-x-8">

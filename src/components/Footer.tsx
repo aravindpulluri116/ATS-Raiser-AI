@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Twitter, Linkedin, Github, Mail } from 'lucide-react';
+import { FileText, Twitter, Linkedin, Github, Mail, Instagram } from 'lucide-react';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -32,10 +32,10 @@ const Footer: React.FC = () => {
   };
 
   const socialLinks = [
-    { icon: Twitter, href: '#twitter', label: 'Twitter' },
-    { icon: Linkedin, href: '#linkedin', label: 'LinkedIn' },
-    { icon: Github, href: '#github', label: 'GitHub' },
-    { icon: Mail, href: '#email', label: 'Email' }
+    { icon: Instagram, href: 'https://instagram.com/techy.aravind', label: 'Twitter' },
+    { icon: Linkedin, href: 'https://www.linkedin.com/in/aravind-pulluri-101291334/', label: 'LinkedIn' },
+    { icon: Github, href: 'github.com/aravindpulluri116', label: 'GitHub' },
+    { icon: Mail, href: 'https://mail.google.com/mail/?view=cm&to=pulluriaravind@gmail.com', label: 'Email' }
   ];
 
   return (

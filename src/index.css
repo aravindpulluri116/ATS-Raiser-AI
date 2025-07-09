@@ -5,6 +5,7 @@
 @layer base {
   * {
     @apply border-border-custom;
+    user-select: none;
   }
   
   body {
@@ -19,7 +20,10 @@
 
 @layer components {
   .glass-effect {
-    @apply bg-slate-800 bg-opacity-80 backdrop-blur-sm border border-slate-600;
+    background-color: rgb(30 41 59 / 0.8);
+    backdrop-filter: blur(4px);
+    border-width: 1px;
+    border-color: #475569;
   }
   
   .button-primary {
