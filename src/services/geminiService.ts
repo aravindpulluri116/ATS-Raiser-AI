@@ -95,6 +95,16 @@ export class GeminiService {
           
           // Method 3: Fallback - create a basic description
           const fallbackText = this.createFallbackResumeText(file);
+          // OCR fallback for scanned/image-only PDFs
+          try {
+            const ocrText = await this.extractTextFromPDFWithOCR(arrayBuffer);
+            if (ocrText.length > 100) {
+              resolve(ocrText);
+              return;
+            }
+          } catch (ocrError) {
+            console.log('OCR extraction failed:', ocrError);
+          }
           resolve(fallbackText);
           
         } catch (error) {
@@ -339,6 +349,38 @@ For best results, recreate your resume in a text-based format and upload again.`
       console.error('PDF.js extraction failed:', error);
       throw new Error(`Unable to extract readable text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  // OCR fallback for scanned/image-only PDFs
+  private static async extractTextFromPDFWithOCR(arrayBuffer: ArrayBuffer): Promise<string> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      throw new Error('OCR extraction can only be performed in the browser environment.');
+    }
+    // Dynamically import required libraries
+    const pdfjsLib = await import('pdfjs-dist');
+    const Tesseract = (await import('tesseract.js')).default;
+
+    // Use PDF.js to render each page as an image
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 });
+      // Create a canvas to render the page
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+      // Run OCR on the canvas image
+      const dataUrl = canvas.toDataURL('image/png');
+      const result = await Tesseract.recognize(dataUrl, 'eng');
+      fullText += result.data.text + '\n';
+    }
+    const cleanedText = fullText.replace(/\s+/g, ' ').trim();
+    return cleanedText;
   }
 
   public static async analyzeResume(
