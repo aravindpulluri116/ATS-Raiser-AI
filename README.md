@@ -24,7 +24,7 @@ A React application that analyzes resumes using Google's Gemini AI to provide AT
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/aravindpulluri116/ATS-Raiser-AI
    cd project/frontend
    ```
 
