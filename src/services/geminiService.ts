@@ -46,65 +46,30 @@ export class GeminiService {
       reader.onload = async (e) => {
         try {
           const arrayBuffer = e.target?.result as ArrayBuffer;
-          const text = await this.extractTextFromArrayBuffer(arrayBuffer);
-          resolve(text);
-        } catch (error) {
-          console.error('PDF processing error:', error);
-          // Try alternative extraction methods
-          try {
-            const alternativeText = await this.extractTextFromPDFAlternative(file);
-            resolve(alternativeText);
-          } catch (altError) {
-            reject(error);
-          }
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  private static async extractTextFromPDFAlternative(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const arrayBuffer = e.target?.result as ArrayBuffer;
           
-          // Method 1: Try with different PDF.js configuration
-          try {
-            const text = await this.extractTextWithAlternativePDFJS(arrayBuffer);
-            if (text.length > 100) {
-              resolve(text);
-              return;
+          // Try multiple extraction methods in sequence
+          const extractionMethods = [
+            () => this.extractTextFromArrayBuffer(arrayBuffer),
+            () => this.extractTextWithAlternativePDFJS(arrayBuffer),
+            () => this.extractTextFromPDFWithOCR(arrayBuffer),
+            () => this.extractRawTextFromPDF(arrayBuffer)
+          ];
+          
+          for (let i = 0; i < extractionMethods.length; i++) {
+            try {
+              const text = await extractionMethods[i]();
+              
+              if (text && text.length > 100 && !this.containsPDFArtifacts(text)) {
+                resolve(text);
+                return;
+              }
+            } catch (methodError) {
+              continue;
             }
-          } catch (error) {
-            console.log('Alternative PDF.js method failed, trying raw extraction...');
           }
           
-          // Method 2: Raw text extraction from PDF binary
-          try {
-            const text = await this.extractRawTextFromPDF(arrayBuffer);
-            if (text.length > 100) {
-              resolve(text);
-              return;
-            }
-          } catch (error) {
-            console.log('Raw text extraction failed...');
-          }
-          
-          // Method 3: Fallback - create a basic description
+          // If all methods fail, create a fallback
           const fallbackText = this.createFallbackResumeText(file);
-          // OCR fallback for scanned/image-only PDFs
-          try {
-            const ocrText = await this.extractTextFromPDFWithOCR(arrayBuffer);
-            if (ocrText.length > 100) {
-              resolve(ocrText);
-              return;
-            }
-          } catch (ocrError) {
-            console.log('OCR extraction failed:', ocrError);
-          }
           resolve(fallbackText);
           
         } catch (error) {
@@ -119,7 +84,7 @@ export class GeminiService {
   private static async extractTextWithAlternativePDFJS(arrayBuffer: ArrayBuffer): Promise<string> {
     const pdfjsLib = await import('pdfjs-dist');
     
-    // Try different worker configurations
+    // Try different worker configurations with reliable CDNs
     const workerConfigs = [
       `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`,
       `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`,
@@ -151,7 +116,6 @@ export class GeminiService {
           return cleanedText;
         }
       } catch (error) {
-        console.log(`Worker config ${workerSrc} failed:`, error);
         continue;
       }
     }
@@ -269,10 +233,10 @@ For best results, recreate your resume in a text-based format and upload again.`
       // Import pdfjs-dist dynamically
       const pdfjsLib = await import('pdfjs-dist');
       
-      // Configure worker properly
+      // Configure worker properly for production
       if (typeof window !== 'undefined') {
-        // Use a specific version that matches our installed version
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+        // Use a reliable CDN that works well with Vercel
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
       }
       
       // Load the PDF document
@@ -346,7 +310,6 @@ For best results, recreate your resume in a text-based format and upload again.`
       
       return fullText;
     } catch (error) {
-      console.error('PDF.js extraction failed:', error);
       throw new Error(`Unable to extract readable text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -388,59 +351,49 @@ For best results, recreate your resume in a text-based format and upload again.`
     jobDescription?: string
   ): Promise<ATSAnalysisResult> {
     try {
-      console.log('🔍 Starting resume analysis for:', file.name);
-      
       // Extract text from file
       const resumeText = await this.extractTextFromFile(file);
-      
-      console.log('📄 Extracted text length:', resumeText.length);
-      console.log('📄 First 200 characters (preview):', resumeText.substring(0, 200));
-      console.log('📄 Last 200 characters (preview):', resumeText.substring(resumeText.length - 200));
       
       // Check if we got a fallback message instead of actual resume text
       if (resumeText.includes('This PDF appears to contain scanned content') || 
           resumeText.includes('Resume Analysis -')) {
-        console.log('❌ Got fallback message, not real resume text');
         throw new Error('Unable to extract readable text from the uploaded file');
       }
       
       // Validate extracted text
       if (resumeText.length < 100) {
-        console.log('❌ Text too short:', resumeText.length);
         throw new Error('Insufficient text extracted for analysis');
       }
       
       // Check for PDF artifacts or code
       if (this.containsPDFArtifacts(resumeText)) {
-        console.log('❌ Contains PDF artifacts');
         throw new Error('PDF contains encoded content that cannot be properly extracted. Please ensure the PDF contains selectable text.');
       }
       
-      console.log('✅ Text extraction successful, sending to Gemini...');
+      // Check if API key is available
+      if (!import.meta.env.VITE_GEMINI_API_KEY) {
+        throw new Error('API configuration error. Please check your environment variables.');
+      }
       
       // Prepare prompt for Gemini
       const prompt = this.buildAnalysisPrompt(resumeText, jobDescription);
       
-      console.log('🤖 Full prompt length being sent to Gemini:', prompt.length);
-      console.log('🤖 Resume text portion length:', resumeText.length);
-      console.log('🤖 Prompt preview (first 500 chars):', prompt.substring(0, 500));
-      
       // Get Gemini model
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       
-      // Generate analysis
-      console.log('⏳ Waiting for Gemini response...');
-      const result = await model.generateContent(prompt);
+      // Generate analysis with timeout
+      const result = await Promise.race([
+        model.generateContent(prompt),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 25000)
+        )
+      ]);
+      
       const response = await result.response;
       const text = response.text();
       
-      console.log('🤖 Raw Gemini response:', text);
-      console.log('🤖 Response length:', text.length);
-      
       // Parse the response
       const analysis = this.parseGeminiResponse(text, file.name);
-      
-      console.log('✅ Analysis completed successfully:', analysis);
       
       return {
         ...analysis,
@@ -448,8 +401,6 @@ For best results, recreate your resume in a text-based format and upload again.`
         isFromGemini: true
       };
     } catch (error) {
-      console.error('❌ Error analyzing resume:', error);
-      
       // Return a more informative fallback analysis
       return this.getFallbackAnalysis(file.name, error instanceof Error ? error.message : 'Unknown error');
     }
@@ -561,7 +512,6 @@ Return only the JSON response, no additional text.
         suggestions: parsed.suggestions || []
       };
     } catch (error) {
-      console.error('Error parsing Gemini response:', error);
       // Return default structure if parsing fails
       return {
         overallScore: 0,

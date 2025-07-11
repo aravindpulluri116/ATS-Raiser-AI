@@ -1,11 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { Upload, FileText, X, AlertCircle, CheckCircle, Loader, Eye, EyeOff } from 'lucide-react';
+import { Upload, FileText, X, AlertCircle, CheckCircle, Loader, Eye, EyeOff, Bug } from 'lucide-react';
 import { GeminiService, ATSAnalysisResult } from '../services/geminiService';
+import PDFDebugger from './PDFDebugger';
 
-// Disable PDF.js worker to avoid version conflicts
-pdfjs.GlobalWorkerOptions.workerSrc = '';
+// Configure PDF.js worker for production
+if (typeof window !== 'undefined') {
+  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+}
 
 interface UploadSectionProps {
   onAnalysisComplete: (results: ATSAnalysisResult) => void;
@@ -22,6 +25,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onAnalysisComplete }) => 
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [showDebugger, setShowDebugger] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -106,7 +110,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onAnalysisComplete }) => 
   };
 
   const onDocumentLoadError = (error: Error) => {
-    console.error('PDF preview error:', error);
     setPreviewError('Unable to preview PDF. You can still analyze the resume.');
   };
 
@@ -299,7 +302,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onAnalysisComplete }) => 
       </div>
 
       {/* Analyze Button */}
-      <div className="text-center">
+      <div className="text-center space-y-4">
         <button
           onClick={handleAnalyze}
           disabled={!uploadedFile || isAnalyzing}
@@ -314,7 +317,25 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onAnalysisComplete }) => 
             'Analyze Resume'
           )}
         </button>
+        
+        {/* Debug Tool Button - Only show in development or when there are errors */}
+        {(import.meta.env.DEV || error) && (
+          <div>
+            <button
+              onClick={() => setShowDebugger(true)}
+              className="text-sm text-slate-400 hover:text-slate-200 flex items-center space-x-1 mx-auto"
+            >
+              <Bug className="h-4 w-4" />
+              <span>Debug PDF Processing</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Debug Tool */}
+      {showDebugger && (
+        <PDFDebugger onClose={() => setShowDebugger(false)} />
+      )}
     </div>
   );
 };
